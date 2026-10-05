@@ -77,14 +77,31 @@ flowchart TD
 ## 3. Communication Patterns
 
 ```mermaid
-matrix
-    title Communication Pattern Matrix
+flowchart LR
+    subgraph SyncFlow ["Synchronous Request-Response (REST / gRPC)"]
+        direction LR
+        Client["Client / User"] -->|"1. HTTPS Request"| GW["API Gateway"]
+        GW -->|"2. gRPC (Low Latency)"| InvSvc["Inventory Service"]
+        InvSvc -->|"3. RESP (Atomic Lua)"| Redis[("Redis Cluster")]
+        GW -->|"4. HTTPS REST"| PaySvc["Payment Service"]
+        PaySvc -->|"5. HTTPS API"| Stripe["3rd-Party Gateway"]
+    end
+
+    subgraph AsyncFlow ["Asynchronous Event-Driven (Apache Kafka)"]
+        direction LR
+        PaySvc2["Payment Service"] -->|"Publish PaymentSucceeded"| Kafka[["Kafka: payment-events"]]
+        Kafka -->|"Consumer Group"| OrderSvc["Order Service"]
+        OrderSvc -->|"Publish OrderConfirmed"| Kafka2[["Kafka: order-events"]]
+        Kafka2 -->|"Consumer Group"| ShipSvc["Fulfillment Service"]
+        Kafka2 -->|"Consumer Group"| NotifSvc["Notification Service"]
+    end
 ```
 
-- **Synchronous (REST/gRPC):**
-  - Gateway $\rightarrow$ Inventory Service (User waiting for immediate reservation confirmation).
-  - Payment Service $\rightarrow$ External Payment Gateway (Real-time card authorization).
-- **Asynchronous (Event-Driven via Kafka):**
-  - Payment Service $\rightarrow$ Order Service (Order creation after payment success).
-  - Order Service $\rightarrow$ Fulfillment Service.
-  - All Services $\rightarrow$ Notification Service.
+### Communication Pattern Summary
+
+| Pattern Type | Flow Path | Protocol | Justification & SLAs |
+| :--- | :--- | :--- | :--- |
+| **Synchronous** | Client $\rightarrow$ Gateway $\rightarrow$ Inventory Service | HTTPS / gRPC | User requires immediate stock reservation confirmation (<50ms p99 SLA). |
+| **Synchronous** | Payment Service $\rightarrow$ External Gateway | HTTPS REST | Real-time card authorization required before confirming reservation. |
+| **Asynchronous**| Payment Service $\rightarrow$ Order Service | Kafka Event Stream | Decouples order creation; buffers messages during Order Service downtime. |
+| **Asynchronous**| Order Service $\rightarrow$ Fulfillment & Notification | Kafka Event Stream | Background dispatch & customer alerts; fire-and-forget processing. |
