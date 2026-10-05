@@ -3,51 +3,49 @@
 ## 1. Cloud Infrastructure & Deployment Topology
 
 ```mermaid
-deploymentView
-    title Deployment Diagram for SALESTORM Production Cluster (AWS / EKS)
+flowchart TD
+    subgraph AWS["AWS Cloud Infrastructure (Region us-east-1)"]
+        subgraph Edge["Edge Security Layer"]
+            WAF["Cloudflare Edge WAF & Anycast CDN\n(DDoS Filter & SSL Termination)"]
+        end
 
-    deploymentNode(aws, "AWS Cloud Infrastructure", "AWS Cloud Region us-east-1") {
-        deploymentNode(cdn_edge, "Cloudflare Anycast CDN & WAF", "Edge Network") {
-            node(waf, "Cloudflare Edge Nodes", "DDoS Filter & SSL Termination")
-        }
+        subgraph VPC["AWS Virtual Private Cloud (VPC: 10.0.0.0/16)"]
+            subgraph PublicSubnet["Public Subnet (Multi-AZ)"]
+                ALB["AWS Application Load Balancer (ALB)\n(Layer 7 Load Balancer)"]
+            end
 
-        deploymentNode(vpc, "AWS Virtual Private Cloud (VPC)", "10.0.0.0/16") {
-            deploymentNode(public_subnet, "Public Subnet (Multi-AZ)", "10.0.1.0/24 & 10.0.2.0/24") {
-                node(alb, "AWS Application Load Balancer (ALB)", "Cross-AZ Load Balancer")
-            }
+            subgraph EKS["AWS EKS Kubernetes Cluster (Private Subnet)"]
+                subgraph K8sNS["Namespace: salestorm-prod"]
+                    GWPods["API Gateway Pods\n(Kong Ingress, HPA: 5..50)"]
+                    InvPods["Inventory Service Pods\n(Go Microservices, HPA: 10..100)"]
+                    PayPods["Payment Service Pods\n(Node.js Microservices, HPA: 10..50)"]
+                    OrderPods["Order Service Pods\n(Java Spring Boot, HPA: 5..30)"]
+                end
+            end
 
-            deploymentNode(eks_cluster, "AWS EKS Kubernetes Cluster", "Private Subnet") {
-                deploymentNode(k8s_ns, "Namespace: salestorm-prod", "Kubernetes Namespace") {
-                    node(gw_pods, "API Gateway Pods (Auto-scaling HPA 5..50)", "Kong Ingress Controller")
-                    node(inv_pods, "Inventory Service Pods (HPA 10..100)", "Go Microservices")
-                    node(pay_pods, "Payment Service Pods (HPA 10..50)", "Node.js Microservices")
-                    node(order_pods, "Order Service Pods (HPA 5..30)", "Java Spring Boot Pods")
-                }
-            }
+            subgraph DataSubnet["Isolated Data Subnet (Multi-AZ)"]
+                ElastiCache[("AWS ElastiCache Redis Cluster\n(6 Shards, Multi-AZ Replication)")]
+                RDS[("AWS Aurora PostgreSQL Primary + Read Replica\n(Multi-AZ Auto-Failover)")]
+                MSK[["AWS MSK Managed Kafka Cluster\n(3 Brokers across 3 AZs)"]]
+            end
+        end
+    end
 
-            deploymentNode(data_subnet, "Isolated Data Subnet (Multi-AZ)", "10.0.10.0/24") {
-                node(elasticache, "AWS ElastiCache Redis Cluster", "6 Shards, Multi-AZ Replication")
-                node(rds, "AWS Aurora PostgreSQL Primary + Read Replica", "Multi-AZ Auto-failover")
-                node(msk, "AWS MSK Managed Kafka Cluster", "3 Brokers across 3 AZs")
-            }
-        }
-    }
+    WAF --> ALB
+    ALB --> GWPods
+    GWPods --> InvPods
+    GWPods --> PayPods
+    GWPods --> OrderPods
 
-    waf --> alb
-    alb --> gw_pods
-    gw_pods --> inv_pods
-    gw_pods --> pay_pods
-    gw_pods --> order_pods
+    InvPods --> ElastiCache
+    InvPods --> RDS
+    InvPods --> MSK
 
-    inv_pods --> elasticache
-    inv_pods --> rds
-    inv_pods --> msk
+    PayPods --> ElastiCache
+    PayPods --> MSK
 
-    pay_pods --> elasticache
-    pay_pods --> msk
-
-    order_pods --> rds
-    order_pods --> msk
+    OrderPods --> RDS
+    OrderPods --> MSK
 ```
 
 ---

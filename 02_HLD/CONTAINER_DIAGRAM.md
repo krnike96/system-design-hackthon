@@ -3,41 +3,39 @@
 ## 1. Container Architecture Overview
 
 ```mermaid
-C4Container
-    title Container Diagram for SALESTORM Platform
+flowchart TD
+    Customer["👤 Customer\n(E-Commerce User)"]
 
-    Person(customer, "Customer", "E-Commerce User")
+    subgraph Boundary["SALESTORM Boundary"]
+        SPA["Single Page App / Mobile\n(React / React Native)"]
+        GW["API Gateway\n(Kong / Spring Cloud)"]
+        InvSvc["Inventory Service\n(Go Microservices)"]
+        PaySvc["Payment Service\n(Node.js / Go)"]
+        OrderSvc["Order Service\n(Java Spring Boot)"]
 
-    Container_Boundary(salestorm_boundary, "SALESTORM Boundary") {
-        Container(spa, "Single Page App / Mobile", "React / React Native", "Client interface for browsing & purchasing.")
-        Container(gw, "API Gateway", "Kong / Spring Cloud", "Authenticates, rate limits, routes REST/gRPC traffic.")
-        Container(inv_svc, "Inventory Service", "Go / Java Spring Boot", "Handles inventory check, reservation lock, and stock updates.")
-        Container(pay_svc, "Payment Service", "Node.js / Go", "Handles idempotency, gateway communication, and retry policy.")
-        Container(order_svc, "Order Service", "Java Spring Boot", "Orchestrates order state machine and outbox events.")
-        
-        ContainerDb(redis, "Redis In-Memory Store", "Redis 7.x Cluster", "Holds atomic stock counters, reservation TTL keys, and idempotency locks.")
-        ContainerDb(pg, "Relational Database", "PostgreSQL 16 Cluster", "Stores customers, catalog, transactional orders, payments, and outbox logs.")
-        ContainerDb(kafka, "Message Broker", "Apache Kafka", "Handles distributed domain events across microservices.")
-    }
+        Redis[("Redis 7.x Cluster\n(Atomic Decr & Locks)")]
+        PG[("PostgreSQL 16 Cluster\n(Transactional DB)")]
+        Kafka[["Apache Kafka\n(Message Broker)"]]
+    end
 
-    System_Ext(pay_gw, "Payment Gateway API", "Stripe API")
+    PayGW["💳 Payment Gateway API\n(Stripe API)"]
 
-    Rel(customer, spa, "Interacts via", "HTTPS")
-    Rel(spa, gw, "API Calls", "HTTPS / JSON")
-    Rel(gw, inv_svc, "Reserves stock", "gRPC / HTTP2")
-    Rel(gw, pay_svc, "Initiates payment", "gRPC / HTTP2")
-    Rel(gw, order_svc, "Queries order status", "REST / JSON")
+    Customer -->|"Interacts via HTTPS"| SPA
+    SPA -->|"API Calls (HTTPS / JSON)"| GW
+    GW -->|"Reserves Stock (gRPC)"| InvSvc
+    GW -->|"Initiates Payment (gRPC)"| PaySvc
+    GW -->|"Queries Status (REST)"| OrderSvc
 
-    Rel(inv_svc, redis, "Atomic Lua Decrement", "RESP")
-    Rel(inv_svc, pg, "Persists reservations", "SQL / TLS")
-    Rel(inv_svc, kafka, "Publishes ReservationEvents", "Kafka Protocol")
+    InvSvc -->|"Atomic Lua DECRBY"| Redis
+    InvSvc -->|"Persists Reservations"| PG
+    InvSvc -->|"Publishes ReservationEvents"| Kafka
 
-    Rel(pay_svc, redis, "Acquires Idempotency Locks", "RESP")
-    Rel(pay_svc, pay_gw, "Authorizes Payment", "HTTPS / REST")
-    Rel(pay_svc, kafka, "Publishes PaymentEvents", "Kafka Protocol")
+    PaySvc -->|"Acquires Idempotency Lock"| Redis
+    PaySvc -->|"Authorizes Payment (HTTPS)"| PayGW
+    PaySvc -->|"Publishes PaymentEvents"| Kafka
 
-    Rel(kafka, order_svc, "Consumes Payment Events", "Kafka Protocol")
-    Rel(order_svc, pg, "Updates Order State", "SQL / TLS")
+    Kafka -->|"Consumes Payment Events"| OrderSvc
+    OrderSvc -->|"Updates Order State"| PG
 ```
 
 ---

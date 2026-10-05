@@ -4,24 +4,26 @@
 The **SALESTORM System Context** illustrates the external actors, clients, core platform boundaries, and third-party integrations (Payment Gateways, Logistics Providers, Notification Channels).
 
 ```mermaid
-C4Context
-    title System Context Diagram for SALESTORM Flash-Sale Platform
+flowchart TD
+    Customer["👤 Customer\n(E-Commerce User)"]
+    Admin["👤 Store Administrator\n(Operations & Admin)"]
 
-    Person(customer, "Customer", "E-Commerce User attempting to buy flash sale products.")
-    Person(admin, "Store Administrator", "Manages inventory, flash sales, and order fulfillments.")
+    subgraph Platform["SALESTORM Platform (System Boundary)"]
+        CoreSystem["SALESTORM Core System\n(High-Scale Flash-Sale Engine)"]
+    end
 
-    System(salestorm, "SALESTORM Platform", "High-scale flash-sale e-commerce platform processing concurrent reservations, payments, and orders.")
+    subgraph ExternalSystems["External Third-Party Services"]
+        PayGW["💳 Payment Gateway\n(Stripe / PayPal API)"]
+        Logistics["🚚 Logistics Partner API\n(FedEx / DHL Tracking)"]
+        NotifGW["📱 Notification Gateway\n(Twilio SMS / SendGrid)"]
+    end
 
-    System_Ext(payment_gateway, "Payment Gateway", "Stripe / PayPal / Bank Gateway for payment authorization & capture.")
-    System_Ext(logistics, "Logistics Partner API", "FedEx / DHL API for tracking & delivery assignment.")
-    System_Ext(notification_gw, "Notification Gateway", "Twilio SMS / SendGrid Email service.")
+    Customer -->|"Browse, Reserve & Pay (HTTPS)"| CoreSystem
+    Admin -->|"Manage Flash Sales & Inventory (HTTPS)"| CoreSystem
 
-    Rel(customer, salestorm, "Views catalog, places reservations, pays for orders", "HTTPS / WSS")
-    Rel(admin, salestorm, "Configures flash sales & views live analytics", "HTTPS")
-
-    Rel(salestorm, payment_gateway, "Authorizes & captures payments", "HTTPS / REST API")
-    Rel(salestorm, logistics, "Dispatches shipment requests & fetches tracking", "HTTPS / REST API")
-    Rel(salestorm, notification_gw, "Sends transactional SMS & email alerts", "HTTPS / Webhooks")
+    CoreSystem -->|"Authorizes & Captures Payments"| PayGW
+    CoreSystem -->|"Dispatches Shipment Requests"| Logistics
+    CoreSystem -->|"Sends SMS / Email Alerts"| NotifGW
 ```
 
 ## 2. Context Interaction Rationale
